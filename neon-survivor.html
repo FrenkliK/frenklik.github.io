@@ -179,7 +179,9 @@
     }
 
     /* Touch UI */
-    .touch { position: fixed; inset: 0; pointer-events: none; z-index: 10; }
+    .touch { position: fixed; inset: 0; pointer-events: none; z-index: 10; touch-action: none; }
+    canvas { touch-action: none; }
+    .full-screen-btn { position: fixed; z-index: 12; top: 116px; right: 14px; pointer-events: auto; padding: 9px 12px; border-radius: 11px; background: rgba(7,10,16,.72); backdrop-filter: blur(10px); }
     .stickBase, .stickKnob, .fireBtn {
       position: absolute; border-radius: 999px;
       border: 1px solid rgba(255,255,255,.14);
@@ -188,9 +190,9 @@
       box-shadow: 0 10px 35px rgba(0,0,0,.35);
       display: none;
     }
-    .stickBase { width: 140px; height: 140px; left: 18px; bottom: 18px; }
-    .stickKnob { width: 64px; height: 64px; left: 18px; bottom: 18px; transform: translate(38px, 38px); }
-    .fireBtn { width: 92px; height: 92px; right: 18px; bottom: 26px; display: none; }
+    .stickBase { width: 156px; height: 156px; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); border-color: rgba(126,255,210,.36); background: rgba(40,180,145,.13); touch-action: none; }
+    .stickKnob { width: 66px; height: 66px; left: max(18px, env(safe-area-inset-left)); bottom: max(18px, env(safe-area-inset-bottom)); transform: translate(45px, 45px); background: rgba(115,255,215,.24); border-color: rgba(155,255,222,.58); pointer-events:none; }
+    .fireBtn { display: none !important; }
     .fireBtn::after {
       content: "FIRE"; position: absolute; inset: 0; display: grid; place-items: center;
       font-weight: 900; letter-spacing: .14em; opacity: .9; font-size: 12px;
@@ -207,11 +209,12 @@
 <canvas id="c"></canvas>
 
 <div class="hud">
+  <button class="btn full-screen-btn" id="fullscreenBtn" type="button" aria-label="Enter full screen">⛶ FULL SCREEN</button>
   <div class="row">
     <div class="left">
       <div class="glass">
         <div class="brand">NEON SURVIVOR</div>
-        <div class="muted">WASD/Arrows · Aim mouse · Click/Space shoot · P pause · M mute</div>
+        <div class="muted">WASD/Arrows · Mouse aim · Touch: left stick moves, touch to aim + shoot</div>
       </div>
 
       <div class="glass">
@@ -394,6 +397,14 @@
   const stickBase = $("stickBase");
   const stickKnob = $("stickKnob");
   const fireBtn = $("fireBtn");
+  const fullscreenBtn = $("fullscreenBtn");
+  fullscreenBtn.addEventListener("click", async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch { showMsg("Use Open full game if full screen is unavailable", 2.0); }
+  });
+  document.addEventListener("fullscreenchange", () => { fullscreenBtn.textContent = document.fullscreenElement ? "⛶ EXIT FULL SCREEN" : "⛶ FULL SCREEN"; });
 
   const STORE_KEY = "neon_survivor_settings_v3";
   const STORE_BEST = "neon_survivor_best_v3";
@@ -1456,7 +1467,7 @@
     render();
   }
 
-  /* Touch controls */
+  /* Touch controls: left stick only moves; any other held touch aims and fires there. */
   const touchMove = { active: false, id: -1, vx: 0, vy: 0 };
   const touchAim = { x: W * 0.7, y: H * 0.5 };
   const touchFire = { active: false, id: -1 };
@@ -1464,95 +1475,60 @@
   function enableTouchUI() {
     stickBase.style.display = "block";
     stickKnob.style.display = "block";
-    fireBtn.style.display = "block";
-    touchUI.style.pointerEvents = "auto";
+    fireBtn.style.display = "none";
+    touchUI.style.pointerEvents = "none";
 
     const baseRect = () => stickBase.getBoundingClientRect();
     const knobRect = () => stickKnob.getBoundingClientRect();
-    const fireRect = () => fireBtn.getBoundingClientRect();
-
+    const toWorld = (x, y) => {
+      const rect = canvas.getBoundingClientRect();
+      return { x: (x - rect.left) * W / rect.width, y: (y - rect.top) * H / rect.height };
+    };
     function setKnob(nx, ny) {
-      const b = baseRect();
-      const k = knobRect();
-      const bx = b.left + b.width / 2;
-      const by = b.top + b.height / 2;
-      const r = b.width * 0.35;
-
-      const dx = nx - bx;
-      const dy = ny - by;
-      const d = Math.hypot(dx, dy) || 1;
-      const cl = Math.min(r, d);
-
-      const ox = (dx / d) * cl;
-      const oy = (dy / d) * cl;
-
-      stickKnob.style.transform =
-        `translate(${(b.left - k.left) + (b.width/2 - k.width/2) + ox}px, ${(b.top - k.top) + (b.height/2 - k.height/2) + oy}px)`;
-
-      touchMove.vx = (ox / r);
-      touchMove.vy = (oy / r);
+      const b = baseRect(), k = knobRect();
+      const bx = b.left + b.width / 2, by = b.top + b.height / 2, r = b.width * 0.35;
+      const dx = nx - bx, dy = ny - by, d = Math.hypot(dx, dy) || 1, cl = Math.min(r, d);
+      const ox = dx / d * cl, oy = dy / d * cl;
+      stickKnob.style.transform = `translate(${(b.left-k.left)+(b.width/2-k.width/2)+ox}px, ${(b.top-k.top)+(b.height/2-k.height/2)+oy}px)`;
+      touchMove.vx = ox / r; touchMove.vy = oy / r;
     }
-
     function resetKnob() {
-      const b = baseRect();
-      const k = knobRect();
-      stickKnob.style.transform =
-        `translate(${(b.left - k.left) + (b.width/2 - k.width/2)}px, ${(b.top - k.top) + (b.height/2 - k.height/2)}px)`;
-      touchMove.vx = 0;
-      touchMove.vy = 0;
+      const b = baseRect(), k = knobRect();
+      stickKnob.style.transform = `translate(${(b.left-k.left)+(b.width/2-k.width/2)}px, ${(b.top-k.top)+(b.height/2-k.height/2)}px)`;
+      touchMove.vx = 0; touchMove.vy = 0;
     }
     resetKnob();
-
+    const isUiControl = (target) => target instanceof Element && !!target.closest("button, input, textarea, select, .uCard, .opt");
     addEventListener("touchstart", (e) => {
+      if (!state.running || state.gameOver || isUiControl(e.target)) return;
+      e.preventDefault();
+      audioEnsure();
       for (const t of e.changedTouches) {
-        const x = t.clientX, y = t.clientY;
-        const b = baseRect();
-        const f = fireRect();
-
-        const inBase = x >= b.left && x <= b.right && y >= b.top && y <= b.bottom;
-        const inFire = x >= f.left && x <= f.right && y >= f.top && y <= f.bottom;
-
-        if (inBase && !touchMove.active) {
-          touchMove.active = true;
-          touchMove.id = t.identifier;
-          setKnob(x, y);
-        } else if (inFire && !touchFire.active) {
-          touchFire.active = true;
-          touchFire.id = t.identifier;
-        } else {
-          touchAim.x = x;
-          touchAim.y = y;
-        }
+        const x=t.clientX, y=t.clientY, b=baseRect();
+        const inBase=x>=b.left&&x<=b.right&&y>=b.top&&y<=b.bottom;
+        if(inBase&&!touchMove.active){touchMove.active=true;touchMove.id=t.identifier;setKnob(x,y);continue;}
+        if(!touchFire.active){touchFire.active=true;touchFire.id=t.identifier;}
+        const aim=toWorld(x,y);touchAim.x=aim.x;touchAim.y=aim.y;
       }
-    }, { passive: true });
-
+    }, { passive: false });
     addEventListener("touchmove", (e) => {
-      for (const t of e.changedTouches) {
-        const x = t.clientX, y = t.clientY;
-        if (touchMove.active && t.identifier === touchMove.id) setKnob(x, y);
-        else { touchAim.x = x; touchAim.y = y; }
+      let controlled=false;
+      for(const t of e.changedTouches){
+        if(t.identifier===touchMove.id){setKnob(t.clientX,t.clientY);controlled=true;}
+        else if(t.identifier===touchFire.id){const aim=toWorld(t.clientX,t.clientY);touchAim.x=aim.x;touchAim.y=aim.y;controlled=true;}
       }
-    }, { passive: true });
-
-    addEventListener("touchend", (e) => {
-      for (const t of e.changedTouches) {
-        if (touchMove.active && t.identifier === touchMove.id) {
-          touchMove.active = false;
-          touchMove.id = -1;
-          resetKnob();
-        }
-        if (touchFire.active && t.identifier === touchFire.id) {
-          touchFire.active = false;
-          touchFire.id = -1;
-        }
+      if(controlled)e.preventDefault();
+    }, { passive: false });
+    const releaseTouches=(e)=>{
+      let controlled=false;
+      for(const t of e.changedTouches){
+        if(t.identifier===touchMove.id){touchMove.active=false;touchMove.id=-1;resetKnob();controlled=true;}
+        if(t.identifier===touchFire.id){touchFire.active=false;touchFire.id=-1;controlled=true;}
       }
-    }, { passive: true });
-
-    addEventListener("touchcancel", () => {
-      touchMove.active = false; touchMove.id = -1;
-      touchFire.active = false; touchFire.id = -1;
-      resetKnob();
-    }, { passive: true });
+      if(controlled&&e.cancelable)e.preventDefault();
+    };
+    addEventListener("touchend",releaseTouches,{passive:false});
+    addEventListener("touchcancel",releaseTouches,{passive:false});
   }
 
   /* Loop */
