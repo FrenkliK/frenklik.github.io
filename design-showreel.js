@@ -2,7 +2,11 @@
   const reel=document.querySelector('[data-showreel]');
   if(!reel)return;
   const slides=[...reel.querySelectorAll('.showreel-slide')];
-  const dots=[...document.querySelectorAll('[data-showreel-dot]')];
+  const dotsHost=document.querySelector('.showreel-dots');
+  const labels=['Product analytics','Digital commerce','Travel and hospitality','Creative studio','Cybersecurity','Live events','Learning platform','Climate intelligence','Real estate','Creator community'];
+  const accents=['#b4ee73','#e6a180','#9fb7a0','#ed7654','#62deca','#ff4b9a','#92ad7e','#79a77c','#d38d69','#d6f080'];
+  labels.forEach((label,i)=>{const dot=document.createElement('button');dot.type='button';dot.className=i===0?'active':'';dot.setAttribute('role','tab');dot.setAttribute('aria-selected',String(i===0));dot.setAttribute('aria-label',`Concept ${i+1}: ${label}`);dot.dataset.showreelDot=i;dotsHost.append(dot);});
+  const dots=[...dotsHost.querySelectorAll('[data-showreel-dot]')];
   const counter=document.querySelector('[data-showreel-index]');
   const pause=document.querySelector('[data-showreel-pause]');
   const reduced=matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -18,6 +22,7 @@
       dot.setAttribute('aria-selected',String(i===active));
     });
     counter.textContent=String(active+1).padStart(2,'0');
+    reel.closest('.design-showreel').style.setProperty('--show-accent',accents[active]);
   };
   const stop=()=>{clearInterval(timer);timer=null;};
   const start=()=>{stop();if(!paused)timer=setInterval(()=>show(active+1),7500);};
