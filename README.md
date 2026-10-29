@@ -12,11 +12,6 @@ python -m http.server 8000
 
 Then visit <http://localhost:8000>.
 
-## Deploy with GitHub Pages
-
-This repository is intended to be the user site for `FrenkliK`. Rename the repository to **`frenklik.github.io`** (GitHub requires the username portion to be lowercase). In **Settings → Pages**, select **Deploy from a branch**, choose **main** and **/(root)**, then save. The site will be available at <https://frenklik.github.io> after Pages finishes its first deployment.
-
-The entry point is the root `index.html`. `.nojekyll` disables Jekyll processing so Pages serves the static files as-is. All demo iframe paths are relative to the site root.
 
 ## Included demos
 
